@@ -39,7 +39,7 @@ func mergeReflect(chans ...<-chan int) <-chan int {
 	out := make(chan int)
 	go func() {
 		defer close(out)
-		cases := make([]reflect.SelectCase, 0, len(chans))
+		var cases []reflect.SelectCase
 		for _, c := range chans {
 			cases = append(cases, reflect.SelectCase{
 				Dir:  reflect.SelectRecv,
@@ -53,6 +53,44 @@ func mergeReflect(chans ...<-chan int) <-chan int {
 				continue
 			}
 			out <- v.Interface().(int)
+		}
+	}()
+	return out
+}
+
+func mergeRec(chans ...<-chan int) <-chan int {
+	n := len(chans)
+	switch n {
+	case 0:
+		return nil
+	case 1:
+		return chans[0]
+	case 2:
+		return mergeTwo(chans[0], chans[1])
+	default:
+		return mergeTwo(merge(chans[:n/2]...), merge(chans[n/2:]...))
+	}
+}
+
+func mergeTwo(a, b <-chan int) <-chan int {
+	out := make(chan int)
+	go func() {
+		defer close(out)
+		for a != nil || b != nil {
+			select {
+			case v, ok := <-a:
+				if !ok {
+					a = nil
+					continue
+				}
+				out <- v
+			case v, ok := <-b:
+				if !ok {
+					b = nil
+					continue
+				}
+				out <- v
+			}
 		}
 	}()
 	return out
